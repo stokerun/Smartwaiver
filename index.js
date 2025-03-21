@@ -23,8 +23,8 @@ const shopify = axios.create({
 
 app.get('/sync', async (req, res) => {
   try {
-    // Step 1: Pull from Smartwaiver webhook queue
-    const queueRes = await smartwaiver.get('/webhooks/queue');
+    // ✅ FIXED: Correct route for webhook queue (singular "webhook")
+    const queueRes = await smartwaiver.get('/webhook/queue');
     const message = queueRes.data.message;
 
     if (!message || !message.unique_id) {
@@ -35,7 +35,7 @@ app.get('/sync', async (req, res) => {
     const waiverId = message.unique_id;
     console.log('📩 Pulled webhook from queue for waiver:', waiverId);
 
-    // Step 2: Fetch full waiver data
+    // Fetch waiver details
     const waiverRes = await smartwaiver.get(`/waivers/${waiverId}`);
     const w = waiverRes.data.waiver || {};
     const p = w.participant || {};
@@ -46,7 +46,6 @@ app.get('/sync', async (req, res) => {
       return res.status(200).send('No email — skipped');
     }
 
-    // Step 3: Determine tags
     const tags = ['Signed Waiver'];
     switch (w.templateId) {
       case 'qfyohqaysnfk4ybccqhyzk':
@@ -60,7 +59,6 @@ app.get('/sync', async (req, res) => {
         break;
     }
 
-    // Step 4: Create or update Shopify customer
     try {
       const existing = await shopify.get(`/customers/search.json?query=email:${email}`);
       let customer = existing.data.customers[0];
@@ -89,7 +87,6 @@ app.get('/sync', async (req, res) => {
         customer = created.customer;
       }
 
-      // Step 5: Add DOB metafield
       if (p.dateOfBirth) {
         await shopify.post('/metafields.json', {
           metafield: {
@@ -120,7 +117,6 @@ app.get('/sync', async (req, res) => {
   }
 });
 
-// Home route
 app.get('/', (req, res) => {
   res.send('✅ Smartwaiver Sync App is running (via webhook queue)');
 });
