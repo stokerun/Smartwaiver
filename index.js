@@ -106,10 +106,9 @@ app.get('/sync', async (req, res) => {
 });
 
 app.get('/', (req, res) => {
-  res.send('🧾 Smartwaiver Sync App Running');
+  res.send('✅ Smartwaiver Sync App is running!');
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Listening on port ${PORT}`);
+  console.log(`🚀 Server listening on port ${PORT}`);
 });
-
