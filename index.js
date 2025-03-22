@@ -8,6 +8,7 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
+// REST API client for Smartwaiver
 const smartwaiver = axios.create({
   baseURL: 'https://api.smartwaiver.com/v4',
   headers: {
@@ -15,6 +16,7 @@ const smartwaiver = axios.create({
   }
 });
 
+// REST and GraphQL API client for Shopify
 const shopify = axios.create({
   baseURL: `https://${process.env.SHOPIFY_SHOP_DOMAIN}/admin/api/2023-10`,
   headers: {
@@ -23,10 +25,80 @@ const shopify = axios.create({
   }
 });
 
+// Function to update marketing consent using Shopify GraphQL
+async function updateMarketingConsent(customerId, emailConsent = true, smsConsent = true) {
+  // Construct the GraphQL mutations for email and SMS consent updates
+  const mutation = `
+    mutation customerMarketingConsentUpdate($emailInput: CustomerEmailMarketingConsentUpdateInput!, $smsInput: CustomerSmsMarketingConsentUpdateInput!) {
+      customerEmailMarketingConsentUpdate(input: $emailInput) {
+        customer {
+          id
+          emailMarketingConsent {
+            acceptsMarketing
+            consentUpdatedAt
+            marketingOptInLevel
+          }
+        }
+        userErrors {
+          field
+          message
+        }
+      }
+      customerSmsMarketingConsentUpdate(input: $smsInput) {
+        customer {
+          id
+          smsMarketingConsent {
+            acceptsMarketing
+            consentUpdatedAt
+            marketingOptInLevel
+          }
+        }
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+  `;
+  
+  // Shopify requires global IDs in the format: gid://shopify/Customer/123456789
+  const customerGID = `gid://shopify/Customer/${customerId}`;
+  const nowISO = new Date().toISOString();
+  
+  const variables = {
+    emailInput: {
+      customerId: customerGID,
+      consent: {
+        acceptsMarketing: emailConsent,
+        marketingOptInLevel: emailConsent ? "explicit" : "none",
+        consentUpdatedAt: nowISO
+      }
+    },
+    smsInput: {
+      customerId: customerGID,
+      consent: {
+        acceptsMarketing: smsConsent,
+        marketingOptInLevel: smsConsent ? "explicit" : "none",
+        consentUpdatedAt: nowISO
+      }
+    }
+  };
+  
+  try {
+    const gqlRes = await shopify.post('/graphql.json', {
+      query: mutation,
+      variables
+    });
+    console.log('GraphQL consent update result:', gqlRes.data);
+  } catch (error) {
+    console.error('GraphQL consent update error:', error.response?.data || error.message);
+  }
+}
+
 app.get('/sync', async (req, res) => {
   try {
-    // Adjusted to fetch waivers signed in the last 20 minutes
-    const fromDts = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+    // Fetch waivers signed in the last 5 minutes
+    const fromDts = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     const toDts = new Date().toISOString();
 
     const { data } = await smartwaiver.get('/waivers', {
@@ -34,7 +106,7 @@ app.get('/sync', async (req, res) => {
     });
     const waivers = data.waivers || [];
     
-    console.log(`🧾 Found ${waivers.length} waivers from the last 20 minutes`);
+    console.log(`🧾 Found ${waivers.length} waivers from the last 5 minutes`);
 
     for (const { waiverId } of waivers) {
       const waiverRes = await smartwaiver.get(`/waivers/${waiverId}`, {
@@ -43,7 +115,7 @@ app.get('/sync', async (req, res) => {
       const w = waiverRes.data.waiver || {};
       const p = w.participant || {};
       
-      // Use top-level field first, then fallback
+      // Try top-level field first, then fallback
       const email = w.email || p.email;
       const firstName = w.firstName || p.firstName || 'Unknown';
       const lastName = w.lastName || p.lastName || 'Unknown';
@@ -111,12 +183,14 @@ app.get('/sync', async (req, res) => {
         }
         
         console.log(`✅ Synced waiver for ${finalEmail}`);
+        // Update marketing consent via GraphQL
+        await updateMarketingConsent(customer.id, true, true);
       } catch (shopifyError) {
         console.error(`❌ Shopify error for ${finalEmail}:`, shopifyError.response?.data || shopifyError.message);
       }
     }
     
-    res.status(200).send(`Synced ${waivers.length} waivers from the last 20 minutes.`);
+    res.status(200).send(`Synced ${waivers.length} waivers from the last 5 minutes.`);
   } catch (error) {
     console.error('❌ Sync failed:', error.message);
     if (error.response) {
