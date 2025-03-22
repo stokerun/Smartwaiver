@@ -63,14 +63,14 @@ async function updateMarketingConsent(customerId, emailConsent = true, smsConsen
   const variables = {
     emailInput: {
       customerId: customerGID,
-      consent: {
+      emailMarketingConsent: {
         marketingOptInLevel: emailConsent ? "explicit" : "none",
         consentUpdatedAt: nowISO
       }
     },
     smsInput: {
       customerId: customerGID,
-      consent: {
+      smsMarketingConsent: {
         marketingOptInLevel: smsConsent ? "explicit" : "none",
         consentUpdatedAt: nowISO
       }
@@ -90,7 +90,7 @@ async function updateMarketingConsent(customerId, emailConsent = true, smsConsen
 
 app.get('/sync', async (req, res) => {
   try {
-    // Adjusted to fetch waivers signed in the last 20 minutes
+    // Fetch waivers signed in the last 20 minutes (adjusted back as needed)
     const fromDts = new Date(Date.now() - 20 * 60 * 1000).toISOString();
     const toDts = new Date().toISOString();
 
@@ -108,7 +108,7 @@ app.get('/sync', async (req, res) => {
       const w = waiverRes.data.waiver || {};
       const p = w.participant || {};
       
-      // Try top-level field first, then fallback
+      // Use top-level field first, then fallback
       const email = w.email || p.email;
       const firstName = w.firstName || p.firstName || 'Unknown';
       const lastName = w.lastName || p.lastName || 'Unknown';
