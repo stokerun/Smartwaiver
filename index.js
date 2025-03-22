@@ -8,7 +8,6 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
-// REST API client for Smartwaiver
 const smartwaiver = axios.create({
   baseURL: 'https://api.smartwaiver.com/v4',
   headers: {
@@ -16,7 +15,6 @@ const smartwaiver = axios.create({
   }
 });
 
-// REST and GraphQL API client for Shopify
 const shopify = axios.create({
   baseURL: `https://${process.env.SHOPIFY_SHOP_DOMAIN}/admin/api/2023-10`,
   headers: {
@@ -25,9 +23,8 @@ const shopify = axios.create({
   }
 });
 
-// Function to update marketing consent using Shopify GraphQL
+// Function to update marketing consent using Shopify GraphQL API
 async function updateMarketingConsent(customerId, emailConsent = true, smsConsent = true) {
-  // Construct the GraphQL mutations for email and SMS consent updates
   const mutation = `
     mutation customerMarketingConsentUpdate($emailInput: CustomerEmailMarketingConsentUpdateInput!, $smsInput: CustomerSmsMarketingConsentUpdateInput!) {
       customerEmailMarketingConsentUpdate(input: $emailInput) {
@@ -61,7 +58,6 @@ async function updateMarketingConsent(customerId, emailConsent = true, smsConsen
     }
   `;
   
-  // Shopify requires global IDs in the format: gid://shopify/Customer/123456789
   const customerGID = `gid://shopify/Customer/${customerId}`;
   const nowISO = new Date().toISOString();
   
@@ -89,7 +85,7 @@ async function updateMarketingConsent(customerId, emailConsent = true, smsConsen
       query: mutation,
       variables
     });
-    console.log('GraphQL consent update result:', gqlRes.data);
+    console.log('GraphQL consent update result:', JSON.stringify(gqlRes.data, null, 2));
   } catch (error) {
     console.error('GraphQL consent update error:', error.response?.data || error.message);
   }
@@ -97,8 +93,8 @@ async function updateMarketingConsent(customerId, emailConsent = true, smsConsen
 
 app.get('/sync', async (req, res) => {
   try {
-    // Fetch waivers signed in the last 5 minutes
-    const fromDts = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    // Adjusted to fetch waivers signed in the last 20 minutes
+    const fromDts = new Date(Date.now() - 20 * 60 * 1000).toISOString();
     const toDts = new Date().toISOString();
 
     const { data } = await smartwaiver.get('/waivers', {
@@ -106,7 +102,7 @@ app.get('/sync', async (req, res) => {
     });
     const waivers = data.waivers || [];
     
-    console.log(`🧾 Found ${waivers.length} waivers from the last 5 minutes`);
+    console.log(`🧾 Found ${waivers.length} waivers from the last 20 minutes`);
 
     for (const { waiverId } of waivers) {
       const waiverRes = await smartwaiver.get(`/waivers/${waiverId}`, {
@@ -190,7 +186,7 @@ app.get('/sync', async (req, res) => {
       }
     }
     
-    res.status(200).send(`Synced ${waivers.length} waivers from the last 5 minutes.`);
+    res.status(200).send(`Synced ${waivers.length} waivers from the last 20 minutes.`);
   } catch (error) {
     console.error('❌ Sync failed:', error.message);
     if (error.response) {
