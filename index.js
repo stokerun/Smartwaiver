@@ -25,109 +25,99 @@ const shopify = axios.create({
 
 app.get('/sync', async (req, res) => {
   try {
-    // Pull the next message from Smartwaiver’s Webhook Queue
-    const queueRes = await smartwaiver.get('/webhooks/queue');
-    const message = queueRes.data.message;
+    // Fetch waivers from the last 24 hours
+    const fromDts = Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000);
+    const { data } = await smartwaiver.get(`/waivers?fromDts=${fromDts}`);
+    const waivers = data.waivers || [];
     
-    if (!message || !message.unique_id) {
-      console.log('📭 No new messages in queue');
-      return res.status(200).send('No new messages in queue');
-    }
-    
-    const waiverId = message.unique_id;
-    console.log('📩 Pulled webhook from queue for waiver:', waiverId);
-    
-    // Fetch full waiver details with pdf=false as per docs
-    const waiverRes = await smartwaiver.get(`/waivers/${waiverId}`, {
-      params: { pdf: 'false' }
-    });
-    const w = waiverRes.data.waiver || {};
-    const p = w.participant || {};
-    const email = p.email;
-    
-    if (!email) {
-      console.log(`⚠️ Skipped waiver ${waiverId} (no email)`);
-      return res.status(200).send('No email — skipped');
-    }
-    
-    // Determine tags based on templateId
-    const tags = ['Signed Waiver'];
-    switch (w.templateId) {
-      case 'qfyohqaysnfk4ybccqhyzk':
-        tags.push('Action Sports Waiver');
-        break;
-      case 'rwaatviecns3lrzbavotxg':
-        tags.push('Spectator Waiver');
-        break;
-      case '61xznzj5qj3dkb2rj68kbn':
-        tags.push('Power Sports Waiver');
-        break;
-    }
-    
-    try {
-      // Check if customer exists in Shopify
-      const existing = await shopify.get(`/customers/search.json?query=email:${email}`);
-      let customer = existing.data.customers[0];
+    console.log(`🧾 Found ${waivers.length} waivers from the last 24 hours`);
+
+    for (const { waiverId } of waivers) {
+      const waiverRes = await smartwaiver.get(`/waivers/${waiverId}`, {
+        params: { pdf: 'false' }
+      });
+      const w = waiverRes.data.waiver || {};
+      const p = w.participant || {};
+      const email = p.email;
       
-      if (customer) {
-        // Update existing customer
-        await shopify.put(`/customers/${customer.id}.json`, {
-          customer: {
-            id: customer.id,
-            tags: [...new Set([...customer.tags.split(', '), ...tags])].join(', '),
-            note: `Signed waiver on ${w.createdOn} (Waiver ID: ${waiverId})`,
-            accepts_marketing: true
-          }
-        });
-      } else {
-        // Create a new customer
-        const { data: created } = await shopify.post('/customers.json', {
-          customer: {
-            first_name: p.firstName,
-            last_name: p.lastName,
-            email,
-            phone: p.phone,
-            tags: tags.join(', '),
-            note: `Signed waiver on ${w.createdOn} (Waiver ID: ${waiverId})`,
-            accepts_marketing: true
-          }
-        });
-        customer = created.customer;
+      if (!email) {
+        console.log(`⚠️ Skipped waiver ${waiverId} (no email)`);
+        continue;
       }
       
-      // Add date of birth as a metafield if available
-      if (p.dateOfBirth) {
-        await shopify.post('/metafields.json', {
-          metafield: {
-            namespace: 'custom',
-            key: 'dob',
-            value: p.dateOfBirth,
-            type: 'date',
-            owner_id: customer.id,
-            owner_resource: 'customer'
-          }
-        });
+      const tags = ['Signed Waiver'];
+      switch (w.templateId) {
+        case 'qfyohqaysnfk4ybccqhyzk':
+          tags.push('Action Sports Waiver');
+          break;
+        case 'rwaatviecns3lrzbavotxg':
+          tags.push('Spectator Waiver');
+          break;
+        case '61xznzj5qj3dkb2rj68kbn':
+          tags.push('Power Sports Waiver');
+          break;
       }
       
-      console.log(`✅ Successfully synced waiver for ${email}`);
-      res.status(200).send(`Synced waiver for ${email}`);
-    } catch (shopifyError) {
-      console.error(`❌ Shopify error for ${email}:`, shopifyError.response?.data || shopifyError.message);
-      res.status(500).send('Shopify error');
+      try {
+        const existing = await shopify.get(`/customers/search.json?query=email:${email}`);
+        let customer = existing.data.customers[0];
+        
+        if (customer) {
+          await shopify.put(`/customers/${customer.id}.json`, {
+            customer: {
+              id: customer.id,
+              tags: [...new Set([...customer.tags.split(', '), ...tags])].join(', '),
+              note: `Signed waiver on ${w.createdOn} (Waiver ID: ${waiverId})`,
+              accepts_marketing: true
+            }
+          });
+        } else {
+          const { data: created } = await shopify.post('/customers.json', {
+            customer: {
+              first_name: p.firstName,
+              last_name: p.lastName,
+              email,
+              phone: p.phone,
+              tags: tags.join(', '),
+              note: `Signed waiver on ${w.createdOn} (Waiver ID: ${waiverId})`,
+              accepts_marketing: true
+            }
+          });
+          customer = created.customer;
+        }
+        
+        if (p.dateOfBirth) {
+          await shopify.post('/metafields.json', {
+            metafield: {
+              namespace: 'custom',
+              key: 'dob',
+              value: p.dateOfBirth,
+              type: 'date',
+              owner_id: customer.id,
+              owner_resource: 'customer'
+            }
+          });
+        }
+        
+        console.log(`✅ Synced waiver for ${email}`);
+      } catch (shopifyError) {
+        console.error(`❌ Shopify error for ${email}:`, shopifyError.response?.data || shopifyError.message);
+      }
     }
     
+    res.status(200).send(`Synced ${waivers.length} waivers from the last 24 hours.`);
   } catch (error) {
     console.error('❌ Sync failed:', error.message);
     if (error.response) {
       console.error('Response status:', error.response.status);
       console.error('Response body:', JSON.stringify(error.response.data, null, 2));
     }
-    res.status(500).send('Error syncing waiver');
+    res.status(500).send('Error syncing waivers');
   }
 });
 
 app.get('/', (req, res) => {
-  res.send('✅ Smartwaiver Sync App is running (Webhook Queue)');
+  res.send('✅ Smartwaiver Sync App is running!');
 });
 
 app.listen(PORT, () => {
