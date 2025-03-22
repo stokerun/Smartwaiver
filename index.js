@@ -75,7 +75,6 @@ async function updateMarketingConsent(customerId, emailConsent = true, smsConsen
       customerId: customerGID,
       smsMarketingConsent: {
         marketingOptInLevel: smsConsent ? "CONFIRMED_OPT_IN" : "UNKNOWN",
-        // If no valid phone, we use "UNSUBSCRIBED"
         marketingState: smsConsent ? "SUBSCRIBED" : "UNSUBSCRIBED",
         consentUpdatedAt: nowISO
       }
@@ -95,8 +94,8 @@ async function updateMarketingConsent(customerId, emailConsent = true, smsConsen
 
 app.get('/sync', async (req, res) => {
   try {
-    // Fetch waivers signed in the last 20 minutes
-    const fromDts = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+    // Fetch waivers signed in the last 5 minutes
+    const fromDts = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     const toDts = new Date().toISOString();
 
     const { data } = await smartwaiver.get('/waivers', {
@@ -104,7 +103,7 @@ app.get('/sync', async (req, res) => {
     });
     const waivers = data.waivers || [];
     
-    console.log(`🧾 Found ${waivers.length} waivers from the last 20 minutes`);
+    console.log(`🧾 Found ${waivers.length} waivers from the last 5 minutes`);
 
     for (const { waiverId } of waivers) {
       const waiverRes = await smartwaiver.get(`/waivers/${waiverId}`, {
@@ -117,12 +116,8 @@ app.get('/sync', async (req, res) => {
       const email = w.email || p.email;
       const firstName = w.firstName || p.firstName || 'Unknown';
       const lastName = w.lastName || p.lastName || 'Unknown';
-      // Try w.phone, then p.phone, then p.mobile, then check if a "participants" array exists
-      const phone =
-        w.phone ||
-        p.phone ||
-        p.mobile ||
-        (w.participants && w.participants.length > 0 ? w.participants[0].phone : '');
+      // Check for phone in multiple potential fields, including participants array
+      const phone = w.phone || p.phone || p.mobile || (w.participants && w.participants.length > 0 ? w.participants[0].phone : '');
       const dateOfBirth = w.dob || p.dateOfBirth;
       
       let finalEmail = email;
@@ -186,7 +181,7 @@ app.get('/sync', async (req, res) => {
         }
         
         console.log(`✅ Synced waiver for ${finalEmail}`);
-        // Determine if the Shopify customer has a valid phone before updating SMS consent.
+        // Update marketing consent: only update SMS consent if phone exists.
         const hasPhone = customer.phone && customer.phone.trim() !== '';
         await updateMarketingConsent(customer.id, true, hasPhone);
       } catch (shopifyError) {
@@ -194,7 +189,7 @@ app.get('/sync', async (req, res) => {
       }
     }
     
-    res.status(200).send(`Synced ${waivers.length} waivers from the last 20 minutes.`);
+    res.status(200).send(`Synced ${waivers.length} waivers from the last 5 minutes.`);
   } catch (error) {
     console.error('❌ Sync failed:', error.message);
     if (error.response) {
