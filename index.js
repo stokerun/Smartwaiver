@@ -23,7 +23,7 @@ const shopify = axios.create({
   }
 });
 
-// Function to update marketing consent using Shopify GraphQL API
+// Updated function to update marketing consent using Shopify GraphQL API
 async function updateMarketingConsent(customerId, emailConsent = true, smsConsent = true) {
   const mutation = `
     mutation customerMarketingConsentUpdate($emailInput: CustomerEmailMarketingConsentUpdateInput!, $smsInput: CustomerSmsMarketingConsentUpdateInput!) {
@@ -31,7 +31,6 @@ async function updateMarketingConsent(customerId, emailConsent = true, smsConsen
         customer {
           id
           emailMarketingConsent {
-            acceptsMarketing
             consentUpdatedAt
             marketingOptInLevel
           }
@@ -45,7 +44,6 @@ async function updateMarketingConsent(customerId, emailConsent = true, smsConsen
         customer {
           id
           smsMarketingConsent {
-            acceptsMarketing
             consentUpdatedAt
             marketingOptInLevel
           }
@@ -58,6 +56,7 @@ async function updateMarketingConsent(customerId, emailConsent = true, smsConsen
     }
   `;
   
+  // Convert customerId to Shopify's global ID format
   const customerGID = `gid://shopify/Customer/${customerId}`;
   const nowISO = new Date().toISOString();
   
@@ -65,7 +64,6 @@ async function updateMarketingConsent(customerId, emailConsent = true, smsConsen
     emailInput: {
       customerId: customerGID,
       consent: {
-        acceptsMarketing: emailConsent,
         marketingOptInLevel: emailConsent ? "explicit" : "none",
         consentUpdatedAt: nowISO
       }
@@ -73,7 +71,6 @@ async function updateMarketingConsent(customerId, emailConsent = true, smsConsen
     smsInput: {
       customerId: customerGID,
       consent: {
-        acceptsMarketing: smsConsent,
         marketingOptInLevel: smsConsent ? "explicit" : "none",
         consentUpdatedAt: nowISO
       }
