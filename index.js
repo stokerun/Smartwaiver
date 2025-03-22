@@ -25,11 +25,13 @@ const shopify = axios.create({
 
 app.get('/sync', async (req, res) => {
   try {
-    // Fetch waivers from the last 24 hours.
-    const fromDts = Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000);
-    const toDts = Math.floor(Date.now() / 1000);
+    // Use ISO 8601 dates for fromDts and toDts:
+    const fromDts = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const toDts = new Date().toISOString();
 
-    const { data } = await smartwaiver.get(`/waivers?fromDts=${fromDts}&toDts=${toDts}`);
+    const { data } = await smartwaiver.get('/waivers', {
+      params: { fromDts, toDts }
+    });
     const waivers = data.waivers || [];
     
     console.log(`🧾 Found ${waivers.length} waivers from the last 24 hours`);
