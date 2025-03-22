@@ -75,6 +75,7 @@ async function updateMarketingConsent(customerId, emailConsent = true, smsConsen
       customerId: customerGID,
       smsMarketingConsent: {
         marketingOptInLevel: smsConsent ? "CONFIRMED_OPT_IN" : "UNKNOWN",
+        // If no valid phone, we use "UNSUBSCRIBED"
         marketingState: smsConsent ? "SUBSCRIBED" : "UNSUBSCRIBED",
         consentUpdatedAt: nowISO
       }
@@ -116,8 +117,12 @@ app.get('/sync', async (req, res) => {
       const email = w.email || p.email;
       const firstName = w.firstName || p.firstName || 'Unknown';
       const lastName = w.lastName || p.lastName || 'Unknown';
-      // Check for phone in multiple possible fields
-      const phone = w.phone || p.phone || p.mobile || '';
+      // Try w.phone, then p.phone, then p.mobile, then check if a "participants" array exists
+      const phone =
+        w.phone ||
+        p.phone ||
+        p.mobile ||
+        (w.participants && w.participants.length > 0 ? w.participants[0].phone : '');
       const dateOfBirth = w.dob || p.dateOfBirth;
       
       let finalEmail = email;
@@ -181,9 +186,9 @@ app.get('/sync', async (req, res) => {
         }
         
         console.log(`✅ Synced waiver for ${finalEmail}`);
-        // Only update SMS consent if phone is non-empty after trimming whitespace
-        const smsConsent = (phone && phone.trim() !== '') ? true : false;
-        await updateMarketingConsent(customer.id, true, smsConsent);
+        // Determine if the Shopify customer has a valid phone before updating SMS consent.
+        const hasPhone = customer.phone && customer.phone.trim() !== '';
+        await updateMarketingConsent(customer.id, true, hasPhone);
       } catch (shopifyError) {
         console.error(`❌ Shopify error for ${finalEmail}:`, shopifyError.response?.data || shopifyError.message);
       }
