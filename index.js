@@ -75,7 +75,6 @@ async function updateMarketingConsent(customerId, emailConsent = true, smsConsen
       customerId: customerGID,
       smsMarketingConsent: {
         marketingOptInLevel: smsConsent ? "CONFIRMED_OPT_IN" : "UNKNOWN",
-        // For SMS, if consent is false, use "UNSUBSCRIBED" instead of "NOT_SUBSCRIBED"
         marketingState: smsConsent ? "SUBSCRIBED" : "UNSUBSCRIBED",
         consentUpdatedAt: nowISO
       }
@@ -113,11 +112,11 @@ app.get('/sync', async (req, res) => {
       const w = waiverRes.data.waiver || {};
       const p = w.participant || {};
       
-      // Try top-level field first, then fallback
+      // Use top-level field first, then fallback
       const email = w.email || p.email;
       const firstName = w.firstName || p.firstName || 'Unknown';
       const lastName = w.lastName || p.lastName || 'Unknown';
-      // Check for phone in multiple potential fields
+      // Check for phone in multiple possible fields
       const phone = w.phone || p.phone || p.mobile || '';
       const dateOfBirth = w.dob || p.dateOfBirth;
       
@@ -182,8 +181,9 @@ app.get('/sync', async (req, res) => {
         }
         
         console.log(`✅ Synced waiver for ${finalEmail}`);
-        // Update marketing consent: update SMS consent only if a phone exists
-        await updateMarketingConsent(customer.id, true, phone ? true : false);
+        // Only update SMS consent if phone is non-empty after trimming whitespace
+        const smsConsent = (phone && phone.trim() !== '') ? true : false;
+        await updateMarketingConsent(customer.id, true, smsConsent);
       } catch (shopifyError) {
         console.error(`❌ Shopify error for ${finalEmail}:`, shopifyError.response?.data || shopifyError.message);
       }
