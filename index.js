@@ -92,7 +92,8 @@ async function updateMarketingConsent(customerId, emailConsent = true, smsConsen
   }
 }
 
-app.get('/sync', async (req, res) => {
+// Use app.all to accept both GET and POST requests on /sync
+app.all('/sync', async (req, res) => {
   try {
     // Fetch waivers signed in the last 5 minutes
     const fromDts = new Date(Date.now() - 5 * 60 * 1000).toISOString();
@@ -116,8 +117,9 @@ app.get('/sync', async (req, res) => {
       const email = w.email || p.email;
       const firstName = w.firstName || p.firstName || 'Unknown';
       const lastName = w.lastName || p.lastName || 'Unknown';
-      // Check for phone in multiple potential fields, including participants array
-      const phone = w.phone || p.phone || p.mobile || (w.participants && w.participants.length > 0 ? w.participants[0].phone : '');
+      // Check for phone in multiple potential fields, including the participants array
+      const phone =
+        w.phone || p.phone || p.mobile || (w.participants && w.participants.length > 0 ? w.participants[0].phone : '');
       const dateOfBirth = w.dob || p.dateOfBirth;
       
       let finalEmail = email;
@@ -181,7 +183,7 @@ app.get('/sync', async (req, res) => {
         }
         
         console.log(`✅ Synced waiver for ${finalEmail}`);
-        // Update marketing consent: only update SMS consent if phone exists.
+        // Determine if the Shopify customer has a valid phone before updating SMS consent.
         const hasPhone = customer.phone && customer.phone.trim() !== '';
         await updateMarketingConsent(customer.id, true, hasPhone);
       } catch (shopifyError) {
