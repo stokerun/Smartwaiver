@@ -67,7 +67,7 @@ async function updateMarketingConsent(customerId, emailConsent = true, smsConsen
       customerId: customerGID,
       emailMarketingConsent: {
         marketingOptInLevel: emailConsent ? "CONFIRMED_OPT_IN" : "UNKNOWN",
-        marketingState: emailConsent ? "OPTED_IN" : "OPTED_OUT",
+        marketingState: emailConsent ? "SUBSCRIBED" : "NOT_SUBSCRIBED",
         consentUpdatedAt: nowISO
       }
     },
@@ -75,7 +75,7 @@ async function updateMarketingConsent(customerId, emailConsent = true, smsConsen
       customerId: customerGID,
       smsMarketingConsent: {
         marketingOptInLevel: smsConsent ? "CONFIRMED_OPT_IN" : "UNKNOWN",
-        marketingState: smsConsent ? "OPTED_IN" : "OPTED_OUT",
+        marketingState: smsConsent ? "SUBSCRIBED" : "NOT_SUBSCRIBED",
         consentUpdatedAt: nowISO
       }
     }
@@ -112,7 +112,7 @@ app.get('/sync', async (req, res) => {
       const w = waiverRes.data.waiver || {};
       const p = w.participant || {};
       
-      // Try top-level field first, then fallback
+      // Use top-level field first, then fallback
       const email = w.email || p.email;
       const firstName = w.firstName || p.firstName || 'Unknown';
       const lastName = w.lastName || p.lastName || 'Unknown';
@@ -180,7 +180,7 @@ app.get('/sync', async (req, res) => {
         }
         
         console.log(`✅ Synced waiver for ${finalEmail}`);
-        // Update marketing consent via GraphQL
+        // Update marketing consent via GraphQL mutation
         await updateMarketingConsent(customer.id, true, true);
       } catch (shopifyError) {
         console.error(`❌ Shopify error for ${finalEmail}:`, shopifyError.response?.data || shopifyError.message);
