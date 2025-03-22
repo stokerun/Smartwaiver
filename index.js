@@ -25,8 +25,8 @@ const shopify = axios.create({
 
 app.get('/sync', async (req, res) => {
   try {
-    // Use ISO 8601 dates for fromDts and toDts:
-    const fromDts = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    // Adjusted to fetch waivers signed in the last 5 minutes
+    const fromDts = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     const toDts = new Date().toISOString();
 
     const { data } = await smartwaiver.get('/waivers', {
@@ -34,7 +34,7 @@ app.get('/sync', async (req, res) => {
     });
     const waivers = data.waivers || [];
     
-    console.log(`🧾 Found ${waivers.length} waivers from the last 24 hours`);
+    console.log(`🧾 Found ${waivers.length} waivers from the last 5 minutes`);
 
     for (const { waiverId } of waivers) {
       const waiverRes = await smartwaiver.get(`/waivers/${waiverId}`, {
@@ -42,11 +42,12 @@ app.get('/sync', async (req, res) => {
       });
       const w = waiverRes.data.waiver || {};
       const p = w.participant || {};
-      const email = p.email;
       
+      // Use fallback email if missing
+      let email = p.email;
       if (!email) {
-        console.log(`⚠️ Skipped waiver ${waiverId} (no email)`);
-        continue;
+        email = `${waiverId}@noemail.smartwaiver.com`;
+        console.log(`⚠️ No email provided for waiver ${waiverId}; using placeholder: ${email}`);
       }
       
       const tags = ['Signed Waiver'];
@@ -109,7 +110,7 @@ app.get('/sync', async (req, res) => {
       }
     }
     
-    res.status(200).send(`Synced ${waivers.length} waivers from the last 24 hours.`);
+    res.status(200).send(`Synced ${waivers.length} waivers from the last 5 minutes.`);
   } catch (error) {
     console.error('❌ Sync failed:', error.message);
     if (error.response) {
