@@ -58,6 +58,7 @@ async function updateMarketingConsent(customerId, emailConsent = true, smsConsen
     }
   `;
   
+  // Convert customerId to Shopify's global ID format
   const customerGID = `gid://shopify/Customer/${customerId}`;
   const nowISO = new Date().toISOString();
   
@@ -74,7 +75,8 @@ async function updateMarketingConsent(customerId, emailConsent = true, smsConsen
       customerId: customerGID,
       smsMarketingConsent: {
         marketingOptInLevel: smsConsent ? "CONFIRMED_OPT_IN" : "UNKNOWN",
-        marketingState: smsConsent ? "SUBSCRIBED" : "NOT_SUBSCRIBED",
+        // For SMS, if consent is false, use "UNSUBSCRIBED" instead of "NOT_SUBSCRIBED"
+        marketingState: smsConsent ? "SUBSCRIBED" : "UNSUBSCRIBED",
         consentUpdatedAt: nowISO
       }
     }
@@ -115,7 +117,7 @@ app.get('/sync', async (req, res) => {
       const email = w.email || p.email;
       const firstName = w.firstName || p.firstName || 'Unknown';
       const lastName = w.lastName || p.lastName || 'Unknown';
-      // Updated phone extraction to also check p.mobile
+      // Check for phone in multiple potential fields
       const phone = w.phone || p.phone || p.mobile || '';
       const dateOfBirth = w.dob || p.dateOfBirth;
       
@@ -180,7 +182,7 @@ app.get('/sync', async (req, res) => {
         }
         
         console.log(`✅ Synced waiver for ${finalEmail}`);
-        // Update marketing consent: update SMS consent only if phone exists
+        // Update marketing consent: update SMS consent only if a phone exists
         await updateMarketingConsent(customer.id, true, phone ? true : false);
       } catch (shopifyError) {
         console.error(`❌ Shopify error for ${finalEmail}:`, shopifyError.response?.data || shopifyError.message);
