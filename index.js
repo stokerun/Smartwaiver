@@ -23,8 +23,8 @@ const shopify = axios.create({
 
 app.get('/sync', async (req, res) => {
   try {
-    // ✅ FIXED: Correct route for webhook queue (singular "webhook")
-    const queueRes = await smartwaiver.get('/webhook/queue');
+    // ✅ Correct route to Smartwaiver Webhook Queue
+    const queueRes = await smartwaiver.get('/webhooks/queue');
     const message = queueRes.data.message;
 
     if (!message || !message.unique_id) {
@@ -35,7 +35,7 @@ app.get('/sync', async (req, res) => {
     const waiverId = message.unique_id;
     console.log('📩 Pulled webhook from queue for waiver:', waiverId);
 
-    // Fetch waiver details
+    // Fetch full waiver
     const waiverRes = await smartwaiver.get(`/waivers/${waiverId}`);
     const w = waiverRes.data.waiver || {};
     const p = w.participant || {};
@@ -46,6 +46,7 @@ app.get('/sync', async (req, res) => {
       return res.status(200).send('No email — skipped');
     }
 
+    // Add tags
     const tags = ['Signed Waiver'];
     switch (w.templateId) {
       case 'qfyohqaysnfk4ybccqhyzk':
@@ -87,6 +88,7 @@ app.get('/sync', async (req, res) => {
         customer = created.customer;
       }
 
+      // Add DOB if present
       if (p.dateOfBirth) {
         await shopify.post('/metafields.json', {
           metafield: {
@@ -117,8 +119,9 @@ app.get('/sync', async (req, res) => {
   }
 });
 
+// Simple GET to confirm app is running
 app.get('/', (req, res) => {
-  res.send('✅ Smartwaiver Sync App is running (via webhook queue)');
+  res.send('✅ Smartwaiver Sync App is running (Webhook Queue)');
 });
 
 app.listen(PORT, () => {
