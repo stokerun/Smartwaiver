@@ -33,6 +33,7 @@ async function updateMarketingConsent(customerId, emailConsent = true, smsConsen
           emailMarketingConsent {
             consentUpdatedAt
             marketingOptInLevel
+            marketingState
           }
         }
         userErrors {
@@ -46,6 +47,7 @@ async function updateMarketingConsent(customerId, emailConsent = true, smsConsen
           smsMarketingConsent {
             consentUpdatedAt
             marketingOptInLevel
+            marketingState
           }
         }
         userErrors {
@@ -64,14 +66,16 @@ async function updateMarketingConsent(customerId, emailConsent = true, smsConsen
     emailInput: {
       customerId: customerGID,
       emailMarketingConsent: {
-        marketingOptInLevel: emailConsent ? "explicit" : "none",
+        marketingOptInLevel: emailConsent ? "CONFIRMED_OPT_IN" : "UNKNOWN",
+        marketingState: emailConsent ? "OPTED_IN" : "OPTED_OUT",
         consentUpdatedAt: nowISO
       }
     },
     smsInput: {
       customerId: customerGID,
       smsMarketingConsent: {
-        marketingOptInLevel: smsConsent ? "explicit" : "none",
+        marketingOptInLevel: smsConsent ? "CONFIRMED_OPT_IN" : "UNKNOWN",
+        marketingState: smsConsent ? "OPTED_IN" : "OPTED_OUT",
         consentUpdatedAt: nowISO
       }
     }
@@ -90,7 +94,7 @@ async function updateMarketingConsent(customerId, emailConsent = true, smsConsen
 
 app.get('/sync', async (req, res) => {
   try {
-    // Fetch waivers signed in the last 20 minutes (adjusted back as needed)
+    // Fetch waivers signed in the last 20 minutes
     const fromDts = new Date(Date.now() - 20 * 60 * 1000).toISOString();
     const toDts = new Date().toISOString();
 
@@ -108,7 +112,7 @@ app.get('/sync', async (req, res) => {
       const w = waiverRes.data.waiver || {};
       const p = w.participant || {};
       
-      // Use top-level field first, then fallback
+      // Try top-level field first, then fallback
       const email = w.email || p.email;
       const firstName = w.firstName || p.firstName || 'Unknown';
       const lastName = w.lastName || p.lastName || 'Unknown';
